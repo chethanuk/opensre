@@ -307,6 +307,13 @@ Thanks goes to these amazing people:
             <sub><b>venturevd</b></sub>
         </a>
     </td>
+            <td align="center">
+        <a href="https://github.com/shriyashsoni">
+            <img src="https://avatars.githubusercontent.com/u/138931443?v=4" width="100;" alt="shriyashsoni"/>
+            <br />
+            <sub><b>shriyashsoni</b></sub>
+        </a>
+    </td>
 		</tr>
 	</tbody>
 </table>
