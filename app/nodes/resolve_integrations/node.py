@@ -21,6 +21,7 @@ from app.integrations.models import (
     AWSIntegrationConfig,
     CoralogixIntegrationConfig,
     DatadogIntegrationConfig,
+    DiscordBotConfig,
     GrafanaIntegrationConfig,
     HoneycombIntegrationConfig,
     OpsGenieIntegrationConfig,
@@ -63,6 +64,7 @@ _SERVICE_KEY_MAP = {
     "mariadb": "mariadb",
     "vercel": "vercel",
     "opsgenie": "opsgenie",
+    "discord": "discord",
 }
 
 
@@ -345,6 +347,19 @@ def _classify_integrations(
                 continue
             if opsgenie_config.api_key:
                 resolved["opsgenie"] = opsgenie_config.model_dump()
+
+        elif key == "discord":
+            try:
+                discord_config = DiscordBotConfig.model_validate({
+                    "bot_token": credentials.get("bot_token", ""),
+                    "application_id": credentials.get("application_id", ""),
+                    "public_key": credentials.get("public_key", ""),
+                    "default_channel_id": credentials.get("default_channel_id"),
+                })
+            except Exception:
+                continue
+            if discord_config.bot_token:
+                resolved["discord"] = discord_config.model_dump()
 
         else:
             resolved[key] = {
@@ -649,6 +664,21 @@ def _load_env_integrations() -> list[dict[str, Any]]:
                 "credentials": opsgenie_config.model_dump(exclude={"integration_id"}),
             }
         )
+
+    discord_bot_token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
+    if discord_bot_token:
+        discord_config = DiscordBotConfig.model_validate({
+            "bot_token": discord_bot_token,
+            "application_id": os.getenv("DISCORD_APPLICATION_ID", "").strip(),
+            "public_key": os.getenv("DISCORD_PUBLIC_KEY", "").strip(),
+            "default_channel_id": os.getenv("DISCORD_DEFAULT_CHANNEL_ID", "").strip() or None,
+        })
+        integrations.append({
+            "id": "env-discord",
+            "service": "discord",
+            "status": "active",
+            "credentials": discord_config.model_dump(),
+        })
 
     atlas_pub = os.getenv("MONGODB_ATLAS_PUBLIC_KEY", "").strip()
     atlas_priv = os.getenv("MONGODB_ATLAS_PRIVATE_KEY", "").strip()

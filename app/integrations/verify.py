@@ -61,6 +61,7 @@ SUPPORTED_VERIFY_SERVICES = (
     "kafka",
     "clickhouse",
     "bitbucket",
+    "discord",
 )
 CORE_VERIFY_SERVICES = frozenset({"grafana", "datadog", "honeycomb", "coralogix", "aws"})
 _SUPPORTED_GRAFANA_TYPES = ("loki", "tempo", "prometheus")
@@ -432,6 +433,30 @@ def resolve_effective_integrations() -> dict[str, dict[str, Any]]:
                     "workspace": bitbucket_workspace,
                     "username": os.getenv("BITBUCKET_USERNAME", "").strip(),
                     "app_password": os.getenv("BITBUCKET_APP_PASSWORD", "").strip(),
+                },
+            }
+
+    discord_integration = classified_integrations.get("discord")
+    if isinstance(discord_integration, dict):
+        effective["discord"] = {
+            "source": source_by_service.get("discord", "local env"),
+            "config": {
+                "bot_token": str(discord_integration.get("bot_token", "")).strip(),
+                "application_id": str(discord_integration.get("application_id", "")).strip(),
+                "public_key": str(discord_integration.get("public_key", "")).strip(),
+                "default_channel_id": discord_integration.get("default_channel_id"),
+            },
+        }
+    else:
+        discord_bot_token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
+        if discord_bot_token:
+            effective["discord"] = {
+                "source": "local env",
+                "config": {
+                    "bot_token": discord_bot_token,
+                    "application_id": os.getenv("DISCORD_APPLICATION_ID", "").strip(),
+                    "public_key": os.getenv("DISCORD_PUBLIC_KEY", "").strip(),
+                    "default_channel_id": os.getenv("DISCORD_DEFAULT_CHANNEL_ID", "").strip() or None,
                 },
             }
 
@@ -915,6 +940,40 @@ def _verify_bitbucket(source: str, config: dict[str, Any]) -> dict[str, str]:
     )
 
 
+def _verify_discord(source: str, config: dict[str, Any]) -> dict[str, str]:
+    bot_token = str(config.get("bot_token", "")).strip()
+    if not bot_token:
+        return _result("discord", source, "missing", "Missing bot token.")
+
+    try:
+        response = httpx.get(
+            "https://discord.com/api/v10/users/@me",
+            headers={"Authorization": f"Bot {bot_token}"},
+            timeout=10.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return _result("discord", source, "failed", f"Bot token validation failed: {exc}")
+
+    if not response.is_success:
+        return _result(
+            "discord",
+            source,
+            "failed",
+            f"Discord API returned {response.status_code}: {response.text[:200]}",
+        )
+
+    data = response.json()
+
+    username = str(data.get("username", "")).strip()
+    bot_id = str(data.get("id", "")).strip()
+    return _result(
+        "discord",
+        source,
+        "passed",
+        f"Connected to Discord API as bot {username} (id {bot_id}).",
+    )
+
+
 def verify_integrations(
     service: str | None = None,
     *,
@@ -987,6 +1046,8 @@ def verify_integrations(
             results.append(_verify_clickhouse(source, config))
         elif current_service == "bitbucket":
             results.append(_verify_bitbucket(source, config))
+        elif current_service == "discord":
+            results.append(_verify_discord(source, config))
 
     return results
 
