@@ -108,7 +108,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if poller_task is not None:
             poller_task.cancel()
             with suppress(asyncio.CancelledError):
-                await poller_task
+                _ = await poller_task
 
 
 app = FastAPI(
